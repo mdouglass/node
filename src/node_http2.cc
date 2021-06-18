@@ -58,8 +58,12 @@ class NgHttp2CallbackScope {
  public:
   explicit NgHttp2CallbackScope(Http2Session* session) : session_(session) {
     ++session_->nghttp2_callback_scope_;
+    Debug(session_.get(), "nghttp callback at depth %d - enter",
+      session_->nghttp2_callback_scope_);
   }
   ~NgHttp2CallbackScope() {
+    Debug(session_.get(), "nghttp callback at depth %d - exit",
+      session_->nghttp2_callback_scope_);
     --session_->nghttp2_callback_scope_;
   }
  private:
