@@ -463,7 +463,7 @@ class V8_BASE_EXPORT Stack {
     void* real_frame = __asan_addr_is_in_fake_stack(
         __asan_get_current_fake_stack(), slot, nullptr, nullptr);
     return real_frame
-               ? (static_cast<char*>(real_frame) + kAsanRealFrameOffsetBytes)
+               ? StackSlot((static_cast<char*>(real_frame) + kAsanRealFrameOffsetBytes))
                : slot;
 #endif  // V8_USE_ADDRESS_SANITIZER
     return slot;
