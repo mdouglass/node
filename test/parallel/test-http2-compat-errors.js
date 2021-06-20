@@ -17,18 +17,22 @@ const server = h2.createServer(common.mustCall(function(req, res) {
   req.on('aborted', common.mustCall());
   res.on('aborted', common.mustNotCall());
 
+  console.log("res.write('hello')")
   res.write('hello');
 
   expected = new Error('kaboom');
+  console.log("res.stream.destroy(expected)")
   res.stream.destroy(expected);
   server.close();
 }));
 
 server.listen(0, common.mustCall(function() {
   const url = `http://localhost:${server.address().port}`;
+  console.log(url)
   const client = h2.connect(url, common.mustCall(() => {
     const request = client.request();
     request.on('data', common.mustCall((chunk) => {
+      console.log("client.destroy()")
       client.destroy();
     }));
   }));

@@ -56,18 +56,19 @@ bool HasHttp2Observer(Environment* env) {
 
 class NgHttp2CallbackScope {
  public:
-  explicit NgHttp2CallbackScope(Http2Session* session) : session_(session) {
+  explicit NgHttp2CallbackScope(Http2Session* session, const char* callback) : session_(session), callback_(callback) {
     ++session_->nghttp2_callback_scope_;
-    Debug(session_.get(), "nghttp callback at depth %d - enter",
-      session_->nghttp2_callback_scope_);
+    Debug(session_.get(), "nghttp callback %s at depth %d - enter",
+      callback_, session_->nghttp2_callback_scope_);
   }
   ~NgHttp2CallbackScope() {
-    Debug(session_.get(), "nghttp callback at depth %d - exit",
-      session_->nghttp2_callback_scope_);
+    Debug(session_.get(), "nghttp callback %s at depth %d - exit",
+      callback_, session_->nghttp2_callback_scope_);
     --session_->nghttp2_callback_scope_;
   }
  private:
   BaseObjectPtr<Http2Session> session_;
+  const char* callback_;
 };
 
 // These configure the callbacks required by nghttp2 itself. There are
@@ -891,7 +892,7 @@ int Http2Session::OnBeginHeadersCallback(nghttp2_session* handle,
                                          const nghttp2_frame* frame,
                                          void* user_data) {
   Http2Session* session = static_cast<Http2Session*>(user_data);
-  NgHttp2CallbackScope ngcbScope(session);
+  NgHttp2CallbackScope ngcbScope(session, "OnBeginHeadersCallback");
   int32_t id = GetFrameID(frame);
   Debug(session, "beginning headers for stream %d", id);
 
@@ -931,7 +932,7 @@ int Http2Session::OnHeaderCallback(nghttp2_session* handle,
                                    uint8_t flags,
                                    void* user_data) {
   Http2Session* session = static_cast<Http2Session*>(user_data);
-  NgHttp2CallbackScope ngcbScope(session);
+  NgHttp2CallbackScope ngcbScope(session, "OnHeaderCallback");
   int32_t id = GetFrameID(frame);
   BaseObjectPtr<Http2Stream> stream = session->FindStream(id);
   // If stream is null at this point, either something odd has happened
@@ -957,7 +958,7 @@ int Http2Session::OnFrameReceive(nghttp2_session* handle,
                                  const nghttp2_frame* frame,
                                  void* user_data) {
   Http2Session* session = static_cast<Http2Session*>(user_data);
-  NgHttp2CallbackScope ngcbScope(session);
+  NgHttp2CallbackScope ngcbScope(session, "OnFrameReceive");
   session->statistics_.frame_count++;
   Debug(session, "complete frame received: type: %d",
         frame->hd.type);
@@ -998,7 +999,7 @@ int Http2Session::OnInvalidFrame(nghttp2_session* handle,
                                  int lib_error_code,
                                  void* user_data) {
   Http2Session* session = static_cast<Http2Session*>(user_data);
-  NgHttp2CallbackScope ngcbScope(session);
+  NgHttp2CallbackScope ngcbScope(session, "OnInvalidFrame");
   const uint32_t max_invalid_frames = session->js_fields_->max_invalid_frames;
 
   Debug(session,
@@ -1036,7 +1037,7 @@ int Http2Session::OnFrameNotSent(nghttp2_session* handle,
                                  int error_code,
                                  void* user_data) {
   Http2Session* session = static_cast<Http2Session*>(user_data);
-  NgHttp2CallbackScope ngcbScope(session);
+  NgHttp2CallbackScope ngcbScope(session, "OnFrameNotSent");
   Environment* env = session->env();
   Debug(session, "frame type %d was not sent, code: %d",
         frame->hd.type, error_code);
@@ -1069,7 +1070,7 @@ int Http2Session::OnFrameSent(nghttp2_session* handle,
                               const nghttp2_frame* frame,
                               void* user_data) {
   Http2Session* session = static_cast<Http2Session*>(user_data);
-  NgHttp2CallbackScope ngcbScope(session);
+  NgHttp2CallbackScope ngcbScope(session, "OnFrameSent");
   session->statistics_.frame_sent += 1;
   return 0;
 }
@@ -1080,7 +1081,7 @@ int Http2Session::OnStreamClose(nghttp2_session* handle,
                                 uint32_t code,
                                 void* user_data) {
   Http2Session* session = static_cast<Http2Session*>(user_data);
-  NgHttp2CallbackScope ngcbScope(session);
+  NgHttp2CallbackScope ngcbScope(session, "OnStreamClose");
   Environment* env = session->env();
   Isolate* isolate = env->isolate();
   HandleScope scope(isolate);
@@ -1121,7 +1122,7 @@ int Http2Session::OnInvalidHeader(nghttp2_session* handle,
                                   void* user_data) {
   // Ignore invalid header fields by default.
   Http2Session* session = static_cast<Http2Session*>(user_data);
-  NgHttp2CallbackScope ngcbScope(session);
+  NgHttp2CallbackScope ngcbScope(session, "OnInvalidHeader");
   return 0;
 }
 
@@ -1136,7 +1137,7 @@ int Http2Session::OnDataChunkReceived(nghttp2_session* handle,
                                       size_t len,
                                       void* user_data) {
   Http2Session* session = static_cast<Http2Session*>(user_data);
-  NgHttp2CallbackScope ngcbScope(session);
+  NgHttp2CallbackScope ngcbScope(session, "OnDataChunkReceived");
   Debug(session, "buffering data chunk for stream %d, size: "
         "%d, flags: %d", id, len, flags);
   Environment* env = session->env();
@@ -1217,7 +1218,7 @@ ssize_t Http2Session::OnSelectPadding(nghttp2_session* handle,
                                       size_t maxPayloadLen,
                                       void* user_data) {
   Http2Session* session = static_cast<Http2Session*>(user_data);
-  NgHttp2CallbackScope ngcbScope(session);
+  NgHttp2CallbackScope ngcbScope(session, "OnSelectPadding");
   ssize_t padding = frame->hd.length;
 
   switch (session->padding_strategy_) {
@@ -1247,7 +1248,7 @@ int Http2Session::OnNghttpError(nghttp2_session* handle,
   // Unfortunately, this is currently the only way for us to know if
   // the session errored because the peer is not an http2 peer.
   Http2Session* session = static_cast<Http2Session*>(user_data);
-  NgHttp2CallbackScope ngcbScope(session);
+  NgHttp2CallbackScope ngcbScope(session, "OnNghttpError");
   Debug(session, "Error '%s'", message);
   if (strncmp(message, BAD_PEER_MESSAGE, len) == 0) {
     Environment* env = session->env();
@@ -1713,6 +1714,7 @@ uint8_t Http2Session::SendPendingData() {
   // SendPendingData should not be called from within an nghttp2 callback
   if (nghttp2_callback_scope_ > 0) {
     Debug(this, "skipping sending pending data from within nghttp2 callback");
+    MaybeScheduleWrite();
     return 1;
   }
 
@@ -1794,7 +1796,7 @@ int Http2Session::OnSendData(
       nghttp2_data_source* source,
       void* user_data) {
   Http2Session* session = static_cast<Http2Session*>(user_data);
-  NgHttp2CallbackScope ngcbScope(session);
+  NgHttp2CallbackScope ngcbScope(session, "OnSendData");
   BaseObjectPtr<Http2Stream> stream = session->FindStream(frame->hd.stream_id);
   if (!stream) return 0;
 
